@@ -1,0 +1,149 @@
+# global configs
+Global:
+  checkpoints: null
+  pretrained_model: null
+  output_dir: ./output/
+  # 使用GPU训练
+  device: gpu
+  # 每几个轮次保存一次
+  save_interval: 1 
+  eval_during_train: True
+  # 每几个轮次验证一次
+  eval_interval: 1 
+  # 训练轮次
+  epochs: 10
+  print_batch_step: 1
+  use_visualdl: True #开启可视化（目前平台不可用）
+  # used for static mode and model export
+  # 图像大小
+  image_shape: [3, 224, 224] 
+  save_inference_dir: ./inference
+  # training model under @to_static
+  to_static: False
+
+# model architecture
+Arch:
+  # 采用的网络
+  name: ShuffleNetV2_x0_25
+  class_num: 5 
+ 
+# loss function config for traing/eval process
+Loss:
+  Train:
+
+    - CELoss: 
+        weight: 1.0
+  Eval:
+    - CELoss:
+        weight: 1.0
+
+
+Optimizer:
+  name: Momentum
+  momentum: 0.9
+  lr:
+    name: Piecewise
+    learning_rate: 0.015
+    decay_epochs: [30, 60, 90]
+    values: [0.1, 0.01, 0.001, 0.0001]
+  regularizer:
+    name: 'L2'
+    coeff: 0.0005
+
+
+# data loader for train and eval
+DataLoader:
+  Train:
+    dataset:
+      name: ImageNetDataset
+      # 根路径
+      image_root: ./dataset/
+      # 前面自己生产得到的训练集文本路径
+      cls_label_path: ./dataset/foods/train_list.txt
+      # 数据预处理
+      transform_ops:
+        - DecodeImage:
+            to_rgb: True
+            channel_first: False
+        - ResizeImage:
+            resize_short: 256
+        - CropImage:
+            size: 224
+        - RandFlipImage:
+            flip_code: 1
+        - NormalizeImage:
+            scale: 1.0/255.0
+            mean: [0.485, 0.456, 0.406]
+            std: [0.229, 0.224, 0.225]
+            order: ''
+
+    sampler:
+      name: DistributedBatchSampler
+      batch_size: 128
+      drop_last: False
+      shuffle: True
+    loader:
+      num_workers: 0
+      use_shared_memory: True
+
+  Eval:
+    dataset: 
+      name: ImageNetDataset
+      # 根路径
+      image_root: ./dataset/
+      # 前面自己生产得到的验证集文本路径
+      cls_label_path: ./dataset/foods/val_list.txt
+      # 数据预处理
+      transform_ops:
+        - DecodeImage:
+            to_rgb: True
+            channel_first: False
+        - ResizeImage:
+            resize_short: 256
+        - CropImage:
+            size: 224
+        - NormalizeImage:
+            scale: 1.0/255.0
+            mean: [0.485, 0.456, 0.406]
+            std: [0.229, 0.224, 0.225]
+            order: ''
+    sampler:
+      name: DistributedBatchSampler
+      batch_size: 128
+      drop_last: False
+      shuffle: True
+    loader:
+      num_workers: 0
+      use_shared_memory: True
+
+Infer:
+  infer_imgs: ./dataset/foods/beef_carpaccio/855780.jpg
+  batch_size: 10
+  transforms:
+    - DecodeImage:
+        to_rgb: True
+        channel_first: False
+    - ResizeImage:
+        resize_short: 256
+    - CropImage:
+        size: 224
+    - NormalizeImage:
+        scale: 1.0/255.0
+        mean: [0.485, 0.456, 0.406]
+        std: [0.229, 0.224, 0.225]
+        order: ''
+    - ToCHWImage:
+  PostProcess:
+    name: Topk
+    # 输出的可能性最高的前topk个
+    topk: 5
+    # 标签文件 需要自己新建文件
+    class_id_map_file: ./dataset/foods/label_list.txt
+
+Metric:
+  Train:
+    - TopkAcc:
+        topk: [1, 5]
+  Eval:
+    - TopkAcc:
+        topk: [1, 5]
